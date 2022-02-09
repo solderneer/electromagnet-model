@@ -4,8 +4,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 # Local
-from mag_model import MagnetModel
-from bat_model import BatteryModel
+from models import MagnetModel, BatteryModel
 
 ##################################### MAIN FUNCTION ##########################
 def main():
