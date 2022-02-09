@@ -2,6 +2,9 @@ import numpy as np
 from numpy import genfromtxt
 import matplotlib.pyplot as plt
 
+#local
+from bat_model import BatteryModel
+
 # HYPERPARAMETERS
 FORMER_INNER_RADIUS = 13.5 #mm
 COPPER_RESISTIVITY = 1.7e-8
@@ -24,14 +27,20 @@ class MagnetModel:
     def __init__(self, verbose=False, saturate=False):
         self.verbose = verbose
         self.saturate = saturate
+        self.awg = 27
+        self.winding = 400
+    
+    def set_params(self, awg, winding):
+        self.awg = awg
+        self.winding = winding
 
     """
     Get the AWG copper and enamel thickness
     Returns:
         copper radius, enamel radius
     """
-    def get_awg_params(self, awg):
-        return (AWG[awg][1]/2, AWG[awg][2]/2)
+    def get_awg_params(self):
+        return (AWG[self.awg][1]/2, AWG[self.awg][2]/2)
 
     """
     Calculates the maximum number of windings in a given cross-sectional area
@@ -49,16 +58,16 @@ class MagnetModel:
     conductor_radius: Copper radius excluding enamel in mm
     windings: Number of windings passing through the cross sectional slice
     """
-    def calc_packing_factor(self, windings, conductor_radius):
+    def calc_packing_factor(self, conductor_radius):
         winding_area = DIM[0] * DIM[1]
-        conductor_area = np.pi * (conductor_radius ** 2) * windings
+        conductor_area = np.pi * (conductor_radius ** 2) * self.winding
         return conductor_area / winding_area
 
-    def calc_winding_shape(self, windings, max_windings):
+    def calc_winding_shape(self, max_windings):
         windings_shape = np.zeros(max_windings[0] * max_windings[1])
 
         # Set the used windings to 1
-        for i in range(windings):
+        for i in range(self.winding):
             windings_shape[i] = 1
 
         # Reshape to account for changing radius
@@ -106,11 +115,11 @@ class MagnetModel:
     """
     Calculate the magnetic flux density
     """
-    def calc_flux_density(self, windings, winding_current):
+    def calc_flux_density(self, winding_current):
         # flux_density = PERMEABILITY * winding_current * (windings / 0.014) 
 
         # More complex calculation
-        mmf = windings * winding_current
+        mmf = self.winding * winding_current
         flux = mmf / RELUCTANCE
         flux_density = flux / IRON_AREA # Units of tesla
  
@@ -125,25 +134,25 @@ class MagnetModel:
     def calc_pulling_force(self, flux_density):
         return ((flux_density ** 2) * IRON_AREA)/(8e-7 * np.pi)
 
-    def run(self, awg, winding, voltage, internal_resistance):
+    def run(self, bat: BatteryModel):
         # Changing height is going to change the circumference of wire required
         # Units in mm
-        conductor_radius, insulator_radius = self.get_awg_params(awg)
+        conductor_radius, insulator_radius = self.get_awg_params()
 
         max_windings = self.calc_max_windings(insulator_radius)
             
         max_winding_count = max_windings[0] * max_windings[1]
 
         # Clamping the winding count to the maximum
-        if winding > max_winding_count:
-            winding = max_winding_count
+        if self.winding > max_winding_count:
+            self.winding = max_winding_count
      
-        packing_factor = self.calc_packing_factor(winding, conductor_radius)
-        winding_shape = self.calc_winding_shape(winding, max_windings) 
+        packing_factor = self.calc_packing_factor(conductor_radius)
+        winding_shape = self.calc_winding_shape(max_windings) 
         winding_length = self.calc_winding_length(winding_shape, insulator_radius)
         winding_resistance = self.calc_winding_resistance(winding_length, conductor_radius)
-        winding_current = self.calc_winding_current(winding_resistance, internal_resistance, voltage) 
-        flux_density = self.calc_flux_density(winding, winding_current)
+        winding_current = self.calc_winding_current(winding_resistance, bat.isr, bat.v) 
+        flux_density = self.calc_flux_density(winding_current)
         pull = self.calc_pulling_force(flux_density)
 
         if(self.verbose):
