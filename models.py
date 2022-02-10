@@ -11,43 +11,46 @@ SPOOL_HEIGHT = 12.5 #mm
 
 # 25 mm diameter assuming all flux goes through center cylinder
 CORE_DIAMETER = 25
-MEAN_PATH_LENGTH = 34 / 1000
+MEAN_PATH_LENGTH = 100.5 / 1000 # Used to be 34
+# MEAN_PATH_LENGTH = 34 / 1000 # Used to be 34
 PERMEABILITY_SPACE = 4e-7 * np.pi
 REL_PERMEABILITY = 980
-IRON_SAT = 1.6 # Teslas
+CORE_SAT = 1.6 # Teslas
 
-IRON_AREA = np.pi * ((CORE_DIAMETER / 2000) ** 2)
+CORE_AREA = np.pi * ((CORE_DIAMETER / 2000) ** 2) + 0.000741
+# CORE_AREA = np.pi * ((CORE_DIAMETER / 2000) ** 2)
 DIM = np.array([SPOOL_WIDTH, SPOOL_HEIGHT])
-RELUCTANCE = MEAN_PATH_LENGTH / (PERMEABILITY_SPACE * REL_PERMEABILITY * IRON_AREA)
-IRON_H_CUTOFF = IRON_SAT / (PERMEABILITY_SPACE * REL_PERMEABILITY)
+RELUCTANCE = MEAN_PATH_LENGTH / (PERMEABILITY_SPACE * REL_PERMEABILITY * CORE_AREA)
+CORE_H_CUTOFF = CORE_SAT / (PERMEABILITY_SPACE * REL_PERMEABILITY)
+
+print(CORE_H_CUTOFF)
 
 # Loading AWG Data
 AWG = genfromtxt('awg.csv', delimiter=',', dtype=float)
 
 class BatteryModel:
     # Lifespan in seconds please
-    def __init__(self, peak, end, lifespan, output_resistance, isr = 0):
-        self.set_params(peak, end, lifespan, output_resistance, isr)
+    def __init__(self, peak, end = 0, lifespan = 1, isr = 0):
+        self.set_params(peak, end, lifespan, isr)
 
     def use(self, duration):
         self.v = self.v - duration * self._gradient
-        if self.v < self._boundary[1]:
-            raise Exception("Battery model exceeds boundaries")
+        if self.v < 0:
+            self.v = 0
 
     def reset(self):
         self.v = self._boundary[0]
 
-    def set_params(self, peak, end, lifespan, output_resistance, isr):
+    def set_params(self, peak, end, lifespan, isr):
         self.v = peak
         self.isr = isr
-        self.output_resistance = output_resistance
         self.lifespan = lifespan
         self.usage_time = 0
         self._gradient = (peak - end) / lifespan
         self._boundary = (peak, end)
 
 class MagnetModel:
-    def __init__(self, verbose=False, saturate=False):
+    def __init__(self, verbose=False, saturate=True):
         self.verbose = verbose
         self.saturate = saturate
         self.awg = 27
@@ -146,17 +149,20 @@ class MagnetModel:
         # More complex calculation
         # mmf = self.winding * winding_current
         # flux = mmf / RELUCTANCE
-        # flux_density = flux / IRON_AREA # Units of tesla
+        # flux_density = flux / CORE_AREA # Units of tesla
  
-        # if(flux_density > IRON_SAT and self.saturate):
-        #    flux_density = IRON_SAT
+        # if(flux_density > CORE_SAT and self.saturate):
+        #    flux_density = CORE_SAT
 
         # METHOD 3 using a linear approximation of B-H curve
         h = (self.winding * winding_current) / MEAN_PATH_LENGTH
-        if h < IRON_H_CUTOFF:
-            flux_density = PERMEABILITY_SPACE * REL_PERMEABILITY * h
+        if self.saturate:
+            if h < CORE_H_CUTOFF:
+                flux_density = PERMEABILITY_SPACE * REL_PERMEABILITY * h
+            else:
+                flux_density = PERMEABILITY_SPACE * REL_PERMEABILITY * CORE_H_CUTOFF + PERMEABILITY_SPACE * (h - CORE_H_CUTOFF)
         else:
-            flux_density = PERMEABILITY_SPACE * REL_PERMEABILITY * IRON_H_CUTOFF + PERMEABILITY_SPACE * (h - IRON_H_CUTOFF)
+            flux_density = PERMEABILITY_SPACE * REL_PERMEABILITY * h
 
         return flux_density
 
@@ -164,7 +170,7 @@ class MagnetModel:
     Calculate the pulling force
     """
     def calc_pulling_force(self, flux_density):
-        return ((flux_density ** 2) * IRON_AREA)/(8e-7 * np.pi)
+        return ((flux_density ** 2) * CORE_AREA)/(8e-7 * np.pi)
 
     def run(self, bat: BatteryModel):
         # Changing height is going to change the circumference of wire required

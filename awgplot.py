@@ -11,8 +11,8 @@ def main():
     WINDING = 1000
     
     # Setup model
-    model = MagnetModel(saturate=True)
-    bat = BatteryModel(9, 5.6, 21600, 24, 3.04)
+    model = MagnetModel(verbose=True)
+    bat = BatteryModel(6, isr=0.480) 
 
     awg = np.arange(2, 51)
     pull = np.empty(49)
