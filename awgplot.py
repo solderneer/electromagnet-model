@@ -12,7 +12,8 @@ def main():
     
     # Setup model
     model = MagnetModel(verbose=True)
-    bat = BatteryModel(6, isr=0.480) 
+    # bat = BatteryModel(9, isr=3.040, s=1, p=1) 
+    bat = BatteryModel(1.5, isr=0.120, s=1, p=4) 
 
     awg = np.arange(2, 51)
     pull = np.empty(49)
@@ -20,7 +21,8 @@ def main():
     count = 0
     for i in range(0, 49):
         model.set_params(awg[i], WINDING)
-        pull[count], current[count] = model.run(bat)
+        pull[count], winding_current = model.run(bat)
+        current[count] = bat.cell_current(winding_current)
         count += 1
 
     fig, ax = plt.subplots(2, 1, sharex=True) 
@@ -31,7 +33,7 @@ def main():
     ax[0].grid()
     
     ax[1].set(xlabel='Wire Guage (AWG)', ylabel='Current (A)',
-       title='Plot of Current against Wire Guage ({} turns)'.format(WINDING))
+       title='Plot of Cell Current against Wire Guage ({} turns)'.format(WINDING))
     ax[1].grid()
 
     plt.show()

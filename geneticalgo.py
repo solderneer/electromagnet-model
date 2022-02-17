@@ -11,20 +11,17 @@ def model_wrapper(P):
 
     battery_configs = [
         BatteryModel(9, isr=3.040), 
-        BatteryModel(6, isr=0.480), 
-        BatteryModel(3, isr=0.120), 
-        BatteryModel(1.5, isr=0.030)
+        BatteryModel(1.5, isr=0.120, s=4, p=1),
+        BatteryModel(1.5, isr=0.120, s=1, p=4)
     ] 
 
     model = MagnetModel()
     model.set_params(int(P[0]), int(P[1]))
     pull, winding_current = model.run(battery_configs[int(P[2])])
+    cell_current = battery_configs[int(P[2])].cell_current(winding_current)
 
-    if winding_current > 1.0:
-        return 0
+    return -1 * pull + (cell_current * 10)
 
-    return -1 * pull + (winding_current * 20)
-
-varbound = np.array([[2,50], [0, 1000], [0, 3]])
+varbound = np.array([[2,50], [0, 1000], [0, 2]])
 model = ga(function=model_wrapper,dimension=3,variable_type='int',variable_boundaries=varbound)
 model.run()

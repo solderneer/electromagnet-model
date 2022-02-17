@@ -10,7 +10,9 @@ from models import MagnetModel, BatteryModel
 def main():
     # Setup model
     model = MagnetModel()
-    bat = BatteryModel(6.4, 5.6, 21600, 0.480)
+    bat = BatteryModel(9, isr=3.040, s=1, p=1) 
+    # bat = BatteryModel(1.5, isr=0.120, s=4, p=1)
+    # bat = BatteryModel(1.5, isr=0.120, s=1, p=4)
 
     fig = plt.figure()
     awg = np.arange(2, 51)
@@ -24,7 +26,8 @@ def main():
     for i in range(1000):
         for j in range(49):
             model.set_params(awg[i][j], winding[i][j])
-            pull[i][j], current[i][j] = model.run(bat)
+            pull[i][j], winding_current = model.run(bat)
+            current[i][j] = bat.cell_current(winding_current)
     
  
     ax = fig.add_subplot(1, 3, 1, projection='3d')
@@ -32,11 +35,11 @@ def main():
     ax.plot_surface(awg, winding, pull, color="red")
 
     ax = fig.add_subplot(1, 3, 2, projection='3d')
-    ax.set(xlabel='Wire Guage (AWG)', ylabel='Winding count (Turns)', zlabel='Winding Current (A)', title='Plot of Winding Current')
+    ax.set(xlabel='Wire Guage (AWG)', ylabel='Winding count (Turns)', zlabel='Cell Current (A)', title='Plot of Cell Current')
     ax.plot_surface(awg, winding, current, color="yellow")
     
     # Defining a fitness function
-    fitness = pull - current * 20
+    fitness = pull - current * 10
     ax = fig.add_subplot(1, 3, 3, projection='3d')
     ax.set(xlabel='Wire Guage (AWG)', ylabel='Winding count (Turns)', zlabel='Model Fitness', title='Plot of Model Fitnes')
     ax.plot_surface(awg, winding, fitness, cmap='viridis', edgecolor='none')

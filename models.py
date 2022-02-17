@@ -1,6 +1,7 @@
 import numpy as np
 from numpy import genfromtxt
 import matplotlib.pyplot as plt
+import math
 
 # HYPERPARAMETERS
 FORMER_INNER_RADIUS = 13.5 #mm
@@ -16,22 +17,19 @@ MEAN_PATH_LENGTH = 100.5 / 1000 # Used to be 34
 PERMEABILITY_SPACE = 4e-7 * np.pi
 REL_PERMEABILITY = 980
 CORE_SAT = 1.6 # Teslas
+ALPHA = 0.0002 # A model tuning parameters
 
 CORE_AREA = np.pi * ((CORE_DIAMETER / 2000) ** 2) + 0.000741
-# CORE_AREA = np.pi * ((CORE_DIAMETER / 2000) ** 2)
+AIR_GAP = 0.0
 DIM = np.array([SPOOL_WIDTH, SPOOL_HEIGHT])
-RELUCTANCE = MEAN_PATH_LENGTH / (PERMEABILITY_SPACE * REL_PERMEABILITY * CORE_AREA)
-CORE_H_CUTOFF = CORE_SAT / (PERMEABILITY_SPACE * REL_PERMEABILITY)
-
-print(CORE_H_CUTOFF)
 
 # Loading AWG Data
 AWG = genfromtxt('awg.csv', delimiter=',', dtype=float)
 
 class BatteryModel:
     # Lifespan in seconds please
-    def __init__(self, peak, end = 0, lifespan = 1, isr = 0):
-        self.set_params(peak, end, lifespan, isr)
+    def __init__(self, peak, end = 0, lifespan = 1, isr = 0, s = 1, p = 1):
+        self.set_params(peak, end, lifespan, isr, s, p)
 
     def use(self, duration):
         self.v = self.v - duration * self._gradient
@@ -41,13 +39,26 @@ class BatteryModel:
     def reset(self):
         self.v = self._boundary[0]
 
-    def set_params(self, peak, end, lifespan, isr):
+    def voltage(self):
+        return self.v * self._s
+
+    def cell_current(self, current):
+        return current / self._p
+
+    def set_params(self, peak, end, lifespan, isr, s, p):
         self.v = peak
-        self.isr = isr
+
+        r = 0
+        for i in range(p):
+            r = r + 1 / (s * isr)
+
+        self.isr = 1/r
         self.lifespan = lifespan
         self.usage_time = 0
         self._gradient = (peak - end) / lifespan
         self._boundary = (peak, end)
+        self._s = s
+        self._p = p
 
 class MagnetModel:
     def __init__(self, verbose=False, saturate=True):
@@ -142,29 +153,9 @@ class MagnetModel:
     Calculate the magnetic flux density
     """
     def calc_flux_density(self, winding_current):
-        # METHOD 1
-        # flux_density = PERMEABILITY * winding_current * (windings / 0.014) 
-
-        # METHOD 2 with hard cutt
-        # More complex calculation
-        # mmf = self.winding * winding_current
-        # flux = mmf / RELUCTANCE
-        # flux_density = flux / CORE_AREA # Units of tesla
- 
-        # if(flux_density > CORE_SAT and self.saturate):
-        #    flux_density = CORE_SAT
-
-        # METHOD 3 using a linear approximation of B-H curve
-        h = (self.winding * winding_current) / MEAN_PATH_LENGTH
-        if self.saturate:
-            if h < CORE_H_CUTOFF:
-                flux_density = PERMEABILITY_SPACE * REL_PERMEABILITY * h
-            else:
-                flux_density = PERMEABILITY_SPACE * REL_PERMEABILITY * CORE_H_CUTOFF + PERMEABILITY_SPACE * (h - CORE_H_CUTOFF)
-        else:
-            flux_density = PERMEABILITY_SPACE * REL_PERMEABILITY * h
-
-        return flux_density
+       h = (self.winding * winding_current) / MEAN_PATH_LENGTH
+       # Model adjusted based on experimental results
+       return (1 - math.exp(-1 * ALPHA * h)) * CORE_SAT + PERMEABILITY_SPACE * h
 
     """
     Calculate the pulling force
@@ -189,12 +180,12 @@ class MagnetModel:
         winding_shape = self.calc_winding_shape(max_windings) 
         winding_length = self.calc_winding_length(winding_shape, insulator_radius)
         winding_resistance = self.calc_winding_resistance(winding_length, conductor_radius)
-        winding_current = self.calc_winding_current(winding_resistance, bat.isr, bat.v) 
+        winding_current = self.calc_winding_current(winding_resistance, bat.isr, bat.voltage()) 
         flux_density = self.calc_flux_density(winding_current)
         pull = self.calc_pulling_force(flux_density)
 
         if(self.verbose):
-            print("\nPARAMS | (AWG: {}, WINDING: {}, VOLTAGE: {}, ISR: {})".format(self.awg, self.winding, bat.v, bat.isr))
+            print("\nPARAMS | (AWG: {}, WINDING: {}, VOLTAGE: {}, ISR: {})".format(self.awg, self.winding, bat.voltage(), bat.isr))
             print("Max Windings: {}".format(max_windings))
             print("Packing Factor: {} %".format(packing_factor))
             print("Winding length: {} meters".format(winding_length/1000))
