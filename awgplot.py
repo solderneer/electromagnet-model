@@ -13,7 +13,7 @@ def main():
     # Setup model
     model = MagnetModel(verbose=True)
     # bat = BatteryModel(9, isr=3.040, s=1, p=1) 
-    bat = BatteryModel(1.5, isr=0.120, s=1, p=4) 
+    bat = BatteryModel(1.5, isr=0.120, s=4, p=1) 
 
     awg = np.arange(2, 51)
     pull = np.empty(49)

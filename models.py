@@ -17,7 +17,8 @@ MEAN_PATH_LENGTH = 100.5 / 1000 # Used to be 34
 PERMEABILITY_SPACE = 4e-7 * np.pi
 REL_PERMEABILITY = 980
 CORE_SAT = 1.6 # Teslas
-ALPHA = 0.0002 # A model tuning parameters
+# ALPHA = 0.0002 # A model tuning parameters
+ALPHA = 0.01
 
 CORE_AREA = np.pi * ((CORE_DIAMETER / 2000) ** 2) + 0.000741
 AIR_GAP = 0.0
